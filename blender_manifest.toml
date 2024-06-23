@@ -1,0 +1,10 @@
+blender_version_min = "4.2.0"
+id = "SaitoTsutomu_OpenURL"
+license = ["SPDX:MIT"]
+maintainer = "Saito Tsutomu <tsutomu7@hotmail.co.jp>"
+name = "OpenURL"
+schema_version = "1.0.0"
+tagline = "Add a text object of URL from the clipboard. And, open the URL of a text object."
+type = "add-on"
+version = "1.0.0"
+website = "https://github.com/SaitoTsutomu/OpenURL/"
