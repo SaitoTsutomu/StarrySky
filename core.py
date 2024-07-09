@@ -1,40 +1,16 @@
-import webbrowser
-
 import bpy
 
 from .register_class import _get_cls
+from .starry_sky import make_object
 
 
-class COU_OT_open_url(bpy.types.Operator):
-    bl_idname = "object.open_url"
-    bl_label = "Open URL"
-    bl_description = "Open the URL of a text object."
-
-    def execute(self, context):
-        lst = list(bpy.data.objects)
-        if context.view_layer.objects.active:
-            lst = [context.view_layer.objects.active] + lst
-        lst = [obj for obj in lst if obj.type == "FONT" and obj.data.body.startswith("http")]
-        if lst:
-            webbrowser.open(lst[0].data.body)
-        return {"FINISHED"}
-
-
-class COU_OT_add_url(bpy.types.Operator):
-    bl_idname = "object.add_url"
-    bl_label = "Add URL"
-    bl_description = "Add the a text object of URL."
+class CSS_OT_starry_sky(bpy.types.Operator):
+    bl_idname = "object.starry_sky"
+    bl_label = "Starry Sky"
+    bl_description = "Create starry sky."
 
     def execute(self, context):
-        s = bpy.context.window_manager.clipboard
-        if not (isinstance(s, str) and s.startswith("http")):
-            self.report({"WARNING"}, "Copy URL")
-            return {"CANCELLED"}
-        bpy.ops.object.text_add(radius=0.1)
-        text = bpy.context.object
-        text.data.body = s
-        text.name = "URL"
-        text.hide_render = True
+        make_object()
         return {"FINISHED"}
 
 
