@@ -4,7 +4,7 @@ bl_info = {
     "name": "StarrySky",
     "author": "tsutomu",
     "version": (0, 1),
-    "blender": (4, 2, 0),
+    "blender": (4, 4, 0),
     "support": "TESTING",
     "category": "Object",
     "description": "",

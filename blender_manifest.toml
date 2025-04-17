@@ -1,4 +1,4 @@
-blender_version_min = "4.2.0"
+blender_version_min = "4.4.0"
 id = "SaitoTsutomu_StarrySky"
 license = ["SPDX:MIT"]
 maintainer = "Saito Tsutomu <tsutomu7@hotmail.co.jp>"

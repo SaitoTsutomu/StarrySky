@@ -1,9 +1,8 @@
-"""
-星表から星空を作る
+"""星表から星空を作る
 
-データ取得元：Astro Commons; ヒッパルコス星表
+データ取得元: Astro Commons; ヒッパルコス星表
 http://astro.starfree.jp/commons/hip/
-（一部抜粋し、有効桁数を3桁に修正）
+(一部抜粋し、有効桁数を3桁に修正)
 """
 
 import csv
@@ -65,8 +64,8 @@ def make_material(obj):
     mat = bpy.data.materials.new(name="line")
     mat.use_nodes = True
     nd_pb = mat.node_tree.nodes["Principled BSDF"]
-    nd_pb.inputs[26].default_value = 0.05, 0.05, 0.05, 1
-    nd_pb.inputs[27].default_value = 1
+    nd_pb.inputs[27].default_value = 0.05, 0.05, 0.05, 1
+    nd_pb.inputs[28].default_value = 1
 
     mat = bpy.data.materials.new(name="star")
     obj.active_material = mat
@@ -89,8 +88,8 @@ def make_material(obj):
     nd_a2.location = -450, 5
     nd_cr.location = -270, 5
     mat.node_tree.links.new(nd_a1.outputs[2], nd_cr.inputs[0])
-    mat.node_tree.links.new(nd_cr.outputs[0], nd_pb.inputs[26])
-    mat.node_tree.links.new(nd_a2.outputs[2], nd_pb.inputs[27])
+    mat.node_tree.links.new(nd_cr.outputs[0], nd_pb.inputs[27])
+    mat.node_tree.links.new(nd_a2.outputs[2], nd_pb.inputs[28])
 
 
 def make_geometry_node(obj):
