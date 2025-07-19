@@ -64,13 +64,17 @@ def make_material(obj):
     mat = bpy.data.materials.new(name="line")
     mat.use_nodes = True
     nd_pb = mat.node_tree.nodes["Principled BSDF"]
-    nd_pb.inputs[27].default_value = 0.05, 0.05, 0.05, 1
+    nd_pb.inputs[0].default_value = 0, 0, 0, 1
+    nd_pb.inputs[2].default_value = 1
+    nd_pb.inputs[27].default_value = 0.03, 0.03, 0.03, 1
     nd_pb.inputs[28].default_value = 1
 
     mat = bpy.data.materials.new(name="star")
     obj.active_material = mat
     mat.use_nodes = True
     nd_pb = mat.node_tree.nodes["Principled BSDF"]
+    nd_pb.inputs[0].default_value = 0, 0, 0, 1
+    nd_pb.inputs[2].default_value = 1
     nd_a1 = mat.node_tree.nodes.new("ShaderNodeAttribute")
     nd_a1.attribute_name = "bv"
     nd_a1.attribute_type = "INSTANCER"
@@ -159,12 +163,14 @@ def set_bloom():
     nodes = scene.node_tree.nodes
     glare = nodes.new(type="CompositorNodeGlare")
     glare.glare_type = "BLOOM"
-    glare.quality = "LOW"
+    glare.quality = "HIGH"
     glare.location = 50, 200
     node1 = scene.node_tree.nodes["Render Layers"]
     node2 = scene.node_tree.nodes["Composite"]
+    node3 = scene.node_tree.nodes["Viewer"]
     scene.node_tree.links.new(node1.outputs[0], glare.inputs[0])
     scene.node_tree.links.new(glare.outputs[0], node2.inputs[0])
+    scene.node_tree.links.new(glare.outputs[0], node3.inputs[0])
     for area in bpy.data.screens["Layout"].areas:
         if area.ui_type == "VIEW_3D":
             area.spaces[0].shading.type = "RENDERED"
