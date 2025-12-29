@@ -6,6 +6,7 @@ http://astro.starfree.jp/commons/hip/
 """
 
 import csv
+import pathlib
 from io import StringIO, TextIOBase
 from itertools import chain, islice
 
@@ -56,7 +57,7 @@ class Table:
 
     @staticmethod
     def read_csv(path, encoding=None, names=None):
-        with path if isinstance(path, TextIOBase) else open(path, encoding=encoding) as fp:
+        with path if isinstance(path, TextIOBase) else pathlib.Path(path).open(encoding=encoding) as fp:
             return Table(np.array([row for row in csv.reader(fp)]), names=names)
 
 
@@ -159,18 +160,16 @@ def make_object():
 
 def set_bloom():
     scene = bpy.data.scenes["Scene"]
-    scene.use_nodes = True
-    nodes = scene.node_tree.nodes
-    glare = nodes.new(type="CompositorNodeGlare")
-    glare.glare_type = "BLOOM"
-    glare.quality = "HIGH"
-    glare.location = 50, 200
-    node1 = scene.node_tree.nodes["Render Layers"]
-    node2 = scene.node_tree.nodes["Composite"]
-    node3 = scene.node_tree.nodes["Viewer"]
-    scene.node_tree.links.new(node1.outputs[0], glare.inputs[0])
-    scene.node_tree.links.new(glare.outputs[0], node2.inputs[0])
-    scene.node_tree.links.new(glare.outputs[0], node3.inputs[0])
+    scene.compositing_node_group = tree = bpy.data.node_groups.new(name="Compositing", type="CompositorNodeTree")
+    gi = tree.nodes.new(type="CompositorNodeRLayers")
+    go = tree.nodes.new(type="NodeGroupOutput")
+    vw = tree.nodes.new(type="CompositorNodeViewer")
+    glare = tree.nodes.new(type="CompositorNodeGlare")
+    glare.inputs["Type"].default_value = "Fog Glow"
+    glare.location = -90, 0
+    tree.links.new(gi.outputs[0], glare.inputs[0])
+    tree.links.new(glare.outputs[0], go.inputs[0])
+    tree.links.new(glare.outputs[0], vw.inputs[0])
     for area in bpy.data.screens["Layout"].areas:
         if area.ui_type == "VIEW_3D":
             area.spaces[0].shading.type = "RENDERED"
