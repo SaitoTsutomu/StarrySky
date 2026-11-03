@@ -1,10 +1,10 @@
-from .register_class import register, ui_classes, unregister  # noqa: F401
+from .register_class import register, ui_classes, unregister  # ruff: ignore[unused-import]
 
 bl_info = {
     "name": "StarrySky",
     "author": "tsutomu",
     "version": (0, 1),
-    "blender": (5, 0, 0),
+    "blender": (5, 2, 0),
     "support": "TESTING",
     "category": "Object",
     "description": "",

@@ -5,77 +5,184 @@ http://astro.starfree.jp/commons/hip/
 (一部抜粋し、有効桁数を3桁に修正)
 """
 
+import contextlib
 import csv
+import os
 import pathlib
+from collections.abc import Iterator, Sequence
 from io import StringIO, TextIOBase
 from itertools import chain, islice
+from typing import Self
 
 import bpy
 import numpy as np
+from numpy.typing import ArrayLike
 
 
 class Table:
-    def __init__(self, data, names=None):
+    """A minimal column-oriented table backed by NumPy arrays.
+
+    Columns are stored in insertion order in ``columns``, a dict mapping
+    each column name to an ``np.ndarray``. All columns have the same
+    length. Columns built from a 2-D ``data`` are 1-D; the dimensions of
+    columns given in a dict are not checked.
+
+    :param data: Either a dict of column name to column values, or a 2-D
+        array-like of rows. For a 2-D input, string columns are converted
+        to ``int`` if possible, otherwise to ``float``, otherwise left as
+        strings. A column containing any value that cannot be parsed, such
+        as an empty field, is left as strings as a whole. Values with
+        leading zeros, such as ``"007"``, are converted too and lose them
+        (``7``). Columns are not
+        copied, so they may share memory with the arrays in ``data``.
+    :param names: Column names for 2-D ``data``. If omitted, the first row
+        of ``data`` is used as the header. Ignored for dict input.
+    :raises ValueError: If dict columns differ in length, if ``data`` is
+        not 2-dimensional, if ``names`` is omitted and ``data`` has no
+        rows, if the number of ``names`` does not match the number of
+        columns, or if the column names are not unique.
+
+    Example::
+
+        t = Table.read_csv("data.csv")
+        t["price"]            # one column as an array
+        t[["name", "price"]]  # a new Table with those columns
+        t[:10]                # a new Table with the first 10 rows
+    """
+
+    def __init__(
+        self,
+        data: dict[str, ArrayLike] | ArrayLike,
+        names: Sequence[str] | None = None,
+    ) -> None:
         if isinstance(data, dict):
-            self.columns = data
+            columns = {name: np.asarray(column) for name, column in data.items()}
+            if len({len(column) for column in columns.values()}) > 1:
+                msg = "all columns must have the same length"
+                raise ValueError(msg)
+            self.columns = columns
             return
+
+        data = np.asarray(data)
+        if data.ndim != 2:
+            msg = "data must be a 2-dimensional array"
+            raise ValueError(msg)
         if names is None:
+            if len(data) == 0:
+                msg = "data has no header row"
+                raise ValueError(msg)
             names = data[0]
             data = data[1:]
+        if len(names) != data.shape[1]:
+            msg = f"names has {len(names)} items but data has {data.shape[1]} columns"
+            raise ValueError(msg)
+        if len(set(names)) != len(names):
+            msg = "column names must be unique"
+            raise ValueError(msg)
+
         self.columns = {}
-        for name, column in zip(names, data.T):
-            try:
-                column = column.astype(int)
-            except ValueError:
+        for name, column_ in zip(names, data.T, strict=True):
+            column = column_
+            if column.dtype.kind in "US":
                 try:
-                    column = column.astype(float)
-                except ValueError:
-                    pass
+                    column = column.astype(int)
+                except (ValueError, OverflowError):
+                    with contextlib.suppress(ValueError):
+                        column = column.astype(float)
             self.columns[name] = column
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str | list[str] | slice | np.ndarray) -> np.ndarray | Self:
         if isinstance(name, list):
-            return Table({k: self.columns[k] for k in name})
+            return type(self)({k: self.columns[k] for k in name})
+        if isinstance(name, (slice, np.ndarray)):
+            return type(self)({k: v[name] for k, v in self.columns.items()})
         return self.columns[name]
 
-    def __str__(self):
-        rows = [",".join(self.columns)]
-        for row in zip(*self.columns.values()):
-            rows.append(",".join(map(str, row)))
-        return "\n".join(rows)
+    def __iter__(self) -> Iterator[str]:
+        """Return all column names."""
+        return iter(self.columns)
 
-    def __repr__(self):
+    def __len__(self) -> int:
+        """Return the number of rows."""
+        return len(next(iter(self.columns.values()), ()))
+
+    def __str__(self) -> str:
+        buf = StringIO()
+        writer = csv.writer(buf, lineterminator="\n")
+        writer.writerow(self.columns)
+        writer.writerows(zip(*self.columns.values(), strict=True))
+        return buf.getvalue()[:-1]
+
+    def __repr__(self) -> str:
         columns = self.columns
-        n = len(next(iter(columns.values())))
         if len(columns) > 5:
             columns = chain(islice(columns, 4), ["..."])
-        return f"<Table [{', '.join(columns)}] {n}rows>"
+        return f"<Table [{', '.join(columns)}] {len(self)} rows>"
 
     @property
-    def values(self):
+    def values(self) -> np.ndarray:
+        """The table as a 2-D array of shape ``(rows, columns)``.
+
+        If the columns have different dtypes, all values are converted to a
+        common dtype (for example, strings when numbers and strings are
+        mixed).
+        """
+        if not self.columns:
+            return np.empty((0, 0))
         return np.array(list(self.columns.values())).T
 
-    @staticmethod
-    def read_csv(path, encoding=None, names=None):
-        with path if isinstance(path, TextIOBase) else pathlib.Path(path).open(encoding=encoding) as fp:
-            return Table(np.array([row for row in csv.reader(fp)]), names=names)
+    @classmethod
+    def read_csv(
+        cls,
+        path: str | os.PathLike | TextIOBase,
+        encoding: str | None = None,
+        names: Sequence[str] | None = None,
+    ) -> Self:
+        """Read a CSV file into a table.
+
+        :param path: File path, or an already opened text file object
+            (an ``io.TextIOBase``; other file-like objects are treated as
+            paths). A file object passed in is not closed.
+        :param encoding: Encoding used to open ``path``. Ignored if ``path``
+            is a file object. Use ``"utf-8-sig"`` for a file with a UTF-8
+            BOM; otherwise the BOM stays in the first column name.
+        :param names: Column names. If omitted, the first row is the header.
+        :return: The table read from the CSV.
+        :raises ValueError: If the CSV is empty or its rows have different
+            numbers of fields.
+        """
+        if isinstance(path, TextIOBase):
+            return cls._read_csv(path, names)
+        with pathlib.Path(path).open(encoding=encoding, newline="") as fp:
+            return cls._read_csv(fp, names)
+
+    @classmethod
+    def _read_csv(cls, fp: TextIOBase, names: Sequence[str] | None) -> Self:
+        rows = [row for row in csv.reader(fp) if row]
+        if not rows:
+            msg = "empty CSV"
+            raise ValueError(msg)
+        if len({len(row) for row in rows}) > 1:
+            msg = "rows have different numbers of fields"
+            raise ValueError(msg)
+        return cls(np.array(rows), names=names)
 
 
 def make_material(obj):
     mat = bpy.data.materials.new(name="line")
     mat.use_nodes = True
     nd_pb = mat.node_tree.nodes["Principled BSDF"]
-    nd_pb.inputs[0].default_value = 0, 0, 0, 1
-    nd_pb.inputs[2].default_value = 1
-    nd_pb.inputs[27].default_value = 0.03, 0.03, 0.03, 1
-    nd_pb.inputs[28].default_value = 1
+    nd_pb.inputs["Base Color"].default_value = 0, 0, 0, 1
+    nd_pb.inputs["Roughness"].default_value = 1
+    nd_pb.inputs["Emission Color"].default_value = 0.03, 0.03, 0.03, 1
+    nd_pb.inputs["Emission Strength"].default_value = 1
 
     mat = bpy.data.materials.new(name="star")
     obj.active_material = mat
     mat.use_nodes = True
     nd_pb = mat.node_tree.nodes["Principled BSDF"]
-    nd_pb.inputs[0].default_value = 0, 0, 0, 1
-    nd_pb.inputs[2].default_value = 1
+    nd_pb.inputs["Base Color"].default_value = 0, 0, 0, 1
+    nd_pb.inputs["Roughness"].default_value = 1
     nd_a1 = mat.node_tree.nodes.new("ShaderNodeAttribute")
     nd_a1.attribute_name = "bv"
     nd_a1.attribute_type = "INSTANCER"
@@ -93,8 +200,8 @@ def make_material(obj):
     nd_a2.location = -450, 5
     nd_cr.location = -270, 5
     mat.node_tree.links.new(nd_a1.outputs[2], nd_cr.inputs[0])
-    mat.node_tree.links.new(nd_cr.outputs[0], nd_pb.inputs[27])
-    mat.node_tree.links.new(nd_a2.outputs[2], nd_pb.inputs[28])
+    mat.node_tree.links.new(nd_cr.outputs[0], nd_pb.inputs["Emission Color"])
+    mat.node_tree.links.new(nd_a2.outputs[2], nd_pb.inputs["Emission Strength"])
 
 
 def make_geometry_node(obj):
